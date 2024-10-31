@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Webcam with Background Video, Transparency, and Body Recognition</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #000;
+    }
+    /* Canvas Element */
+    #canvasElement {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Canvas to display the final composite video -->
+  <canvas id="canvasElement"></canvas>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix"></script>
+
+  <script>
+    // Video elements for background and webcam feeds
+    const bgVideo = document.createElement('video');
+    bgVideo.src = 'background.mp4';
+    bgVideo.muted = true;
+    bgVideo.loop = true; 
+    bgVideo.crossOrigin = 'anonymous';
+    bgVideo.style.display = 'none'; // Hide the video element
+
+    const webcamVideo = document.createElement('video');
+    webcamVideo.setAttribute('autoplay', '');
+    webcamVideo.setAttribute('playsinline', ''); // For mobile compatibility
+
+    // Main canvas for displaying the final composite
+    const canvas = document.getElementById('canvasElement');
+    const ctx = canvas.getContext('2d');
+
+    // Offscreen canvases for each video layer
+    const bgCanvas = document.createElement('canvas');
+    const bgCtx = bgCanvas.getContext('2d');
+    const webcamCanvas = document.createElement('canvas');
+    const webcamCtx = webcamCanvas.getContext('2d');
+
+    // Variables for background video manipulation and throttling
+    let bgPosition = { x: 0, y: 0 };
+    let bgSize = { width: 0, height: 0 };
+    let bgOpacity = 0;
+    let frameCounter = 0;
+    const bgCycleTime = 10 * 1000;
+    let bgCycleStartTime = Date.now();
+    const bgFadeDuration = bgCycleTime / 2;
+    const bgScale = 0.8;
+    const frameSkip = 1; // Throttle frame updates
+
+    // Load BodyPix model
+    let net;
+    async function loadModel() {
+      net = await bodyPix.load();
+      console.log("BodyPix model loaded.");
+    }
+
+    // Initialize background video position and size
+    function initializeBackgroundVideo() {
+      bgSize.width = canvas.width * bgScale;
+      bgSize.height = canvas.height * bgScale;
+      updateBackgroundVideoPosition();
+    }
+
+    // Update background video position every cycle
+    function updateBackgroundVideoPosition() {
+      const corners = [
+        { x: 0, y: 0 },
+        { x: canvas.width - bgSize.height, y: 0 },
+        { x: 0, y: canvas.height - bgSize.width },
+        { x: canvas.width - bgSize.height, y: canvas.height - bgSize.width }
+      ];
+      const randomIndex = Math.floor(Math.random() * corners.length);
+      bgPosition = corners[randomIndex];
+      bgCycleStartTime = Date.now();
+    }
+
+    // Function to animate and composite both video feeds with body segmentation
+    async function animateCompositeVideo() {
+      frameCounter++;
+
+      // Only update every `frameSkip` frames
+      if (frameCounter % frameSkip === 0) {
+        // Clear main canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Calculate the opacity cycle for background video
+        const currentTime = Date.now();
+        const elapsedTime = currentTime - bgCycleStartTime;
+        if (elapsedTime >= bgCycleTime) updateBackgroundVideoPosition();
+
+        // Calculate fade-in and fade-out effect for bg video
+        if (elapsedTime < bgFadeDuration) {
+          bgOpacity = elapsedTime / bgFadeDuration;
+        } else if (elapsedTime < bgCycleTime - bgFadeDuration) {
+          bgOpacity = 1;
+        } else {
+          bgOpacity = (bgCycleTime - elapsedTime) / bgFadeDuration;
+        }
+
+        // Draw background video to its offscreen canvas
+        bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+        bgCtx.globalAlpha = bgOpacity;
+        bgCtx.save();
+        bgCtx.translate(bgPosition.x + bgSize.height / 2, bgPosition.y + bgSize.width / 2);
+        bgCtx.rotate(-Math.PI / 2);
+        bgCtx.drawImage(bgVideo, -bgSize.width / 2, -bgSize.height / 2, bgSize.width, bgSize.height);
+        bgCtx.restore();
+
+        // Draw webcam feed to its offscreen canvas
+        webcamCtx.drawImage(webcamVideo, 0, 0, webcamCanvas.width, webcamCanvas.height);
+
+        // Perform body segmentation on the webcam frame
+        // const segmentation = await net.segmentPerson(webcamVideo, {
+        //   flipHorizontal: false,
+        //   internalResolution: 'medium',
+        //   segmentationThreshold: 0.5,
+        // });
+
+        // Get pixel data from both canvases
+        const bgFrame = bgCtx.getImageData(0, 0, canvas.width, canvas.height);
+        const webcamFrame = webcamCtx.getImageData(0, 0, canvas.width, canvas.height);
+        const bgData = bgFrame.data;
+        const webcamData = webcamFrame.data;
+        // const mask = segmentation.data;
+
+        // Loop through each pixel, blend background only within body segmentation
+        for (let i = 0; i < webcamData.length; i += 4) {
+          const n = i / 4; // Pixel index
+
+          // Only blend within the segmented body area
+        //   if (mask[n] === 1) {
+            const r = webcamData[i];
+            const g = webcamData[i + 1];
+            const b = webcamData[i + 2];
+
+            // Define black threshold for transparency
+            const threshold = 50;
+            if (r < threshold && g < threshold && b < threshold) {
+              // Use background pixel if webcam pixel is black and within the body
+              webcamData[i] = bgData[i];
+              webcamData[i + 1] = bgData[i + 1];
+              webcamData[i + 2] = bgData[i + 2];
+              webcamData[i + 3] = bgData[i + 3] * bgOpacity; // Apply background opacity
+            }
+        //   }
+        }
+
+        // Draw the composited image data to the main canvas
+        ctx.putImageData(webcamFrame, 0, 0);
+      }
+
+      requestAnimationFrame(animateCompositeVideo);
+    }
+
+    // Start the webcam video stream
+    async function startWebcam() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        webcamVideo.srcObject = stream;
+
+        webcamVideo.onloadedmetadata = () => {
+          // Set dimensions for all canvases based on webcam video
+          canvas.width = webcamVideo.videoWidth;
+          canvas.height = webcamVideo.videoHeight;
+          bgCanvas.width = canvas.width;
+          bgCanvas.height = canvas.height;
+          webcamCanvas.width = canvas.width;
+          webcamCanvas.height = canvas.height;
+
+          initializeBackgroundVideo();
+          bgVideo.play();
+          animateCompositeVideo();
+        };
+      } catch (err) {
+        console.error('Error accessing the webcam: ', err);
+      }
+    }
+
+    // Start everything once the background video has loaded and the model is ready
+    bgVideo.onloadeddata = async () => {
+      document.body.appendChild(bgVideo);
+      await loadModel(); // Load BodyPix model before starting
+      startWebcam();
+    };
+  </script>
+
+</body>
+</html>
