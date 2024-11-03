@@ -110,7 +110,7 @@
             const b = video.pixels[index + 2];
 
             // Set transparency if the pixel is close to black
-            const threshold = 150;
+            const threshold = 70;
             if (r < threshold && g < threshold && b < threshold) {
               video.pixels[index + 3] = 0; // Make black pixel fully transparent
             }
