@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>p5.js Transparent Black Overlay with Autoplay Fix</title>
+  <title>p5.js AR Overlay with BodyPix</title>
   <style>
     body, html {
       margin: 0;
@@ -21,6 +21,8 @@
     }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix"></script>
 </head>
 <body>
 
@@ -30,9 +32,16 @@
 <script>
   let video;
   let bgVideo;
+  let bodyPixNet;
+  let segmentation;
+  let segmentationInterval;
 
-  function setup() {
+  async function setup() {
     createCanvas(windowWidth, windowHeight);
+
+    // Load the BodyPix model for body segmentation
+    bodyPixNet = await bodyPix.load();
+    console.log("BodyPix model loaded.");
 
     // Load the background video with inline and autoplay settings
     bgVideo = createVideo('background.mp4');
@@ -42,7 +51,7 @@
     bgVideo.loop();
     bgVideo.hide(); // Hide the default video element
 
-    // Access the rear camera feed
+    // Access the rear camera feed and ensure it’s loaded before processing
     video = createCapture({
       video: {
         facingMode: { ideal: "environment" } // Use the rear-facing camera
@@ -50,6 +59,14 @@
     });
     video.size(width, height); // Match video to canvas size
     video.hide(); // Hide the default video element
+
+    // Wait until the video metadata is loaded to get correct dimensions
+    video.elt.onloadedmetadata = () => {
+      console.log("Camera feed dimensions:", video.width, video.height);
+
+      // Start BodyPix segmentation on an interval to avoid continuous processing
+      segmentationInterval = setInterval(runSegmentation, 200); // Run every 200ms
+    };
   }
 
   function start() {
@@ -61,34 +78,56 @@
     startImage.style.display = "none";
   }
 
+  async function runSegmentation() {
+    // Run body segmentation if video dimensions are valid
+    if (bodyPixNet && video.width > 0 && video.height > 0) {
+      segmentation = await bodyPixNet.segmentPerson(video.elt, {
+        flipHorizontal: false,
+        internalResolution: 'medium',
+        segmentationThreshold: 0.7,
+      });
+    }
+  }
+
   function draw() {
-    // Only draw if the background video is playing
-    if (bgVideo.elt.readyState === bgVideo.elt.HAVE_ENOUGH_DATA) {
-      // Draw the background video
+    // Only proceed if segmentation data and background video are ready
+    if (segmentation && bgVideo.elt.readyState === bgVideo.elt.HAVE_ENOUGH_DATA) {
+      // Draw the background video on the canvas
       image(bgVideo, 0, 0, width, height);
 
-      // Process the live video feed pixels to make black areas transparent
+      // Process the live video feed pixels based on segmentation data
       video.loadPixels();
+
+      // Loop through each pixel in the live video feed
       for (let y = 0; y < video.height; y++) {
         for (let x = 0; x < video.width; x++) {
           const index = (x + y * video.width) * 4;
-          const r = video.pixels[index];
-          const g = video.pixels[index + 1];
-          const b = video.pixels[index + 2];
 
-          // Set transparency if the pixel is close to black
-          const threshold = 50;
-          if (r < threshold && g < threshold && b < threshold) {
-            video.pixels[index + 3] = 0; // Make black pixel fully transparent
+          // Only apply transparency within the segmented body area
+          if (segmentation.data[y * video.width + x] === 1) {
+            const r = video.pixels[index];
+            const g = video.pixels[index + 1];
+            const b = video.pixels[index + 2];
+
+            // Set transparency if the pixel is close to black
+            const threshold = 150;
+            if (r < threshold && g < threshold && b < threshold) {
+              video.pixels[index + 3] = 0; // Make black pixel fully transparent
+            }
           }
         }
       }
-      video.updatePixels(); // Apply pixel changes to the video feed
+      video.updatePixels(); // Apply the transparency changes to the video feed
 
       // Draw the modified video frame on top of the background video
       image(video, 0, 0, width, height);
     }
   }
+
+  // Stop the segmentation interval when the page is closed or reloaded
+  window.onunload = () => {
+    clearInterval(segmentationInterval);
+  };
 </script>
 
 </body>
