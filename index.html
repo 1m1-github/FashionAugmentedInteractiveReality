@@ -2,17 +2,30 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>p5.js Transparent Black Overlay</title>
+  <title>p5.js Transparent Black Overlay with Autoplay Fix</title>
   <style>
     body, html {
       margin: 0;
       padding: 0;
       overflow: hidden;
     }
+    /* Centered image for the start button */
+    #startImage {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 150px; /* Adjust size as needed */
+      height: auto;
+      cursor: pointer;
+    }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
 </head>
 <body>
+
+<!-- Image that acts as the start button -->
+<img id="startImage" src="qrcode.png" alt="Start" onclick="start()">
 
 <script>
   let video;
@@ -21,46 +34,57 @@
   function setup() {
     createCanvas(windowWidth, windowHeight);
 
-    // Load and start the background video
-    bgVideo = createVideo('background.mp4', () => {
-      bgVideo.loop();
-      bgVideo.hide(); // Hide the default video element
-    });
+    // Load the background video and set it to muted to avoid autoplay restrictions
+    bgVideo = createVideo('background.mp4');
+    bgVideo.muted = true;
+    bgVideo.hide(); // Hide the default video element
 
     // Access the front camera feed
     video = createCapture({
       video: {
-        facingMode: { ideal: "environment" }
+        facingMode: { ideal: "user" }
       }
     });
     video.size(width, height); // Match video to canvas size
     video.hide(); // Hide the default video element
   }
 
+  function start() {
+    // Start both videos after user interaction to comply with autoplay policies
+    bgVideo.loop();
+
+    // Hide the start image after clicking
+    const startImage = document.getElementById("startImage");
+    startImage.style.display = "none";
+  }
+
   function draw() {
-    // Draw the background video on the canvas first
-    image(bgVideo, 0, 0, width, height);
+    // Only draw if the background video is playing
+    if (bgVideo.elt.readyState === bgVideo.elt.HAVE_ENOUGH_DATA) {
+      // Draw the background video
+      image(bgVideo, 0, 0, width, height);
 
-    // Process the live video feed pixels to make black areas transparent
-    video.loadPixels();
-    for (let y = 0; y < video.height; y++) {
-      for (let x = 0; x < video.width; x++) {
-        const index = (x + y * video.width) * 4;
-        const r = video.pixels[index];
-        const g = video.pixels[index + 1];
-        const b = video.pixels[index + 2];
+      // Process the live video feed pixels to make black areas transparent
+      video.loadPixels();
+      for (let y = 0; y < video.height; y++) {
+        for (let x = 0; x < video.width; x++) {
+          const index = (x + y * video.width) * 4;
+          const r = video.pixels[index];
+          const g = video.pixels[index + 1];
+          const b = video.pixels[index + 2];
 
-        // Check if pixel is close to black
-        const threshold = 50;
-        if (r < threshold && g < threshold && b < threshold) {
-          video.pixels[index + 3] = 0; // Make black pixel fully transparent
+          // Set transparency if the pixel is close to black
+          const threshold = 50;
+          if (r < threshold && g < threshold && b < threshold) {
+            video.pixels[index + 3] = 0; // Make black pixel fully transparent
+          }
         }
       }
-    }
-    video.updatePixels(); // Apply pixel changes to the video feed
+      video.updatePixels(); // Apply pixel changes to the video feed
 
-    // Draw the modified video frame on top of the background video
-    image(video, 0, 0, width, height);
+      // Draw the modified video frame on top of the background video
+      image(video, 0, 0, width, height);
+    }
   }
 </script>
 
