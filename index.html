@@ -34,15 +34,18 @@
   function setup() {
     createCanvas(windowWidth, windowHeight);
 
-    // Load the background video and set it to muted to avoid autoplay restrictions
+    // Load the background video with inline and autoplay settings
     bgVideo = createVideo('background.mp4');
+    bgVideo.attribute('playsinline', 'true');
+    bgVideo.attribute('autoplay', 'true');
     bgVideo.muted = true;
+    bgVideo.loop();
     bgVideo.hide(); // Hide the default video element
 
-    // Access the front camera feed
+    // Access the rear camera feed
     video = createCapture({
       video: {
-        facingMode: { ideal: "user" }
+        facingMode: { ideal: "environment" } // Use the rear-facing camera
       }
     });
     video.size(width, height); // Match video to canvas size
@@ -50,8 +53,8 @@
   }
 
   function start() {
-    // Start both videos after user interaction to comply with autoplay policies
-    bgVideo.loop();
+    // Start the background video playback
+    bgVideo.play();
 
     // Hide the start image after clicking
     const startImage = document.getElementById("startImage");
