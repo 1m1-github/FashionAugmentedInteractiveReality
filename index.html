@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>p5.js Camera Overlay</title>
+  <title>AR Overlay with p5.js and BodyPix</title>
   <style>
     body, html {
       margin: 0;
@@ -11,33 +11,86 @@
     }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix"></script>
 </head>
 <body>
 
 <script>
   let video;
+  let bgVideo;
+  let bodyPixNet;
+  let segmentation;
+  let canvas;
 
-  function setup() {
-    createCanvas(windowWidth, windowHeight);
+  async function setup() {
+    // Set up the main p5 canvas
+    canvas = createCanvas(windowWidth, windowHeight);
 
-    // Access the front camera
+    // Load and start playing the background video
+    bgVideo = createVideo('background.mp4');
+    bgVideo.loop();
+    bgVideo.hide(); // Hide the default video element
+
+    // Access the front camera feed
     video = createCapture({
       video: {
-        facingMode: { ideal: "user" } // Prefer front camera
+        facingMode: { ideal: "user" }
       }
     });
-    video.size(width, height); // Resize video to canvas size
-    video.hide(); // Hide the default video element, as we’ll draw it on canvas
+    video.size(width, height);
+    video.hide(); // Hide default video element
+
+    // Load the BodyPix model for body segmentation
+    bodyPixNet = await bodyPix.load();
+    console.log("BodyPix model loaded.");
   }
 
   function draw() {
-    // Draw the video feed on the canvas
-    image(video, 0, 0, width, height);
+    if (!bodyPixNet) return; // Wait until BodyPix model is loaded
 
-    // Apply an overlay effect (e.g., translucent green overlay)
-    fill(0, 255, 0, 50); // Green color with transparency
-    rect(0, 0, width, height);
+    // Draw the background video
+    image(bgVideo, 0, 0, width, height);
+
+    // Perform body segmentation on the video feed
+    bodyPixNet.segmentPerson(video.elt, {
+      flipHorizontal: false,
+      internalResolution: 'medium',
+      segmentationThreshold: 0.7,
+    }).then(segmentation => {
+      // Draw the camera feed with transparent black areas within the segmented body
+      image(video, 0, 0, width, height);
+
+      // Load pixel data for manipulation
+      loadPixels();
+      video.loadPixels();
+
+      // Loop over each pixel and apply transparency
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const index = (y * width + x) * 4;
+
+          // Check if pixel is within the body segmentation area
+          if (segmentation.data[y * width + x] === 1) {
+            // Get the color of the current pixel in the video feed
+            const r = pixels[index];
+            const g = pixels[index + 1];
+            const b = pixels[index + 2];
+
+            // Set transparency if the pixel is close to black
+            const threshold = 150;
+            if (r < threshold && g < threshold && b < threshold) {
+              pixels[index + 3] = 0; // Make the pixel transparent
+            }
+          }
+        }
+      }
+
+      // Update the pixels with transparency applied
+      updatePixels();
+    });
   }
+
 </script>
 
 </body>
