@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>p5.js AR Overlay with BodyPix</title>
+  <title>p5.js AR Overlay with BodyPix Upper Body</title>
   <style>
     body, html {
       margin: 0;
@@ -35,6 +35,17 @@
   let bodyPixNet;
   let segmentation;
   let segmentationInterval;
+
+  // Define BodyPix part IDs for the upper body parts we want
+  const upperBodyPartIds = [
+    12, // leftUpperArmFront
+    13, // leftUpperArmBack
+    14, // rightUpperArmFront
+    15, // rightUpperArmBack
+    6,  // leftTorso
+    7,  // rightTorso
+    8   // middleTorso
+  ];
 
   async function setup() {
     createCanvas(windowWidth, windowHeight);
@@ -79,9 +90,9 @@
   }
 
   async function runSegmentation() {
-    // Run body segmentation if video dimensions are valid
+    // Run part segmentation for the upper body parts only
     if (bodyPixNet && video.width > 0 && video.height > 0) {
-      segmentation = await bodyPixNet.segmentPerson(video.elt, {
+      segmentation = await bodyPixNet.segmentPersonParts(video.elt, {
         flipHorizontal: false,
         internalResolution: 'medium',
         segmentationThreshold: 0.7,
@@ -102,15 +113,16 @@
       for (let y = 0; y < video.height; y++) {
         for (let x = 0; x < video.width; x++) {
           const index = (x + y * video.width) * 4;
+          const partId = segmentation.data[y * video.width + x];
 
-          // Only apply transparency within the segmented body area
-          if (segmentation.data[y * video.width + x] === 1) {
+          // Only apply transparency within the specified upper body parts
+          if (upperBodyPartIds.includes(partId)) {
             const r = video.pixels[index];
             const g = video.pixels[index + 1];
             const b = video.pixels[index + 2];
 
             // Set transparency if the pixel is close to black
-            const threshold = 70;
+            const threshold = 50;
             if (r < threshold && g < threshold && b < threshold) {
               video.pixels[index + 3] = 0; // Make black pixel fully transparent
             }
