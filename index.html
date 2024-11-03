@@ -1,15 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <title>Webcam with Background Video, Transparency, and Body Recognition</title>
   <style>
-    body, html {
+    body,
+    html {
       margin: 0;
       padding: 0;
       overflow: hidden;
       background: #000;
     }
+
     /* Canvas Element */
     #canvasElement {
       position: absolute;
@@ -21,9 +24,12 @@
     }
   </style>
 </head>
+
 <body>
 
-  <!-- Canvas to display the final composite video -->
+  <input type="file" accept="video/*" capture="camera">
+
+  <!-- Canvas to display the final composite video
   <canvas id="canvasElement"></canvas>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
@@ -34,7 +40,7 @@
     const bgVideo = document.createElement('video');
     bgVideo.src = 'background.mp4';
     bgVideo.muted = true;
-    bgVideo.loop = true; 
+    bgVideo.loop = true;
     bgVideo.crossOrigin = 'anonymous';
     bgVideo.style.display = 'none'; // Hide the video element
 
@@ -144,21 +150,21 @@
           const n = i / 4; // Pixel index
 
           // Only blend within the segmented body area
-        //   if (mask[n] === 1) {
-            const r = webcamData[i];
-            const g = webcamData[i + 1];
-            const b = webcamData[i + 2];
+          //   if (mask[n] === 1) {
+          const r = webcamData[i];
+          const g = webcamData[i + 1];
+          const b = webcamData[i + 2];
 
-            // Define black threshold for transparency
-            const threshold = 50;
-            if (r < threshold && g < threshold && b < threshold) {
-              // Use background pixel if webcam pixel is black and within the body
-              webcamData[i] = bgData[i];
-              webcamData[i + 1] = bgData[i + 1];
-              webcamData[i + 2] = bgData[i + 2];
-              webcamData[i + 3] = bgData[i + 3] * bgOpacity; // Apply background opacity
-            }
-        //   }
+          // Define black threshold for transparency
+          const threshold = 50;
+          if (r < threshold && g < threshold && b < threshold) {
+            // Use background pixel if webcam pixel is black and within the body
+            webcamData[i] = bgData[i];
+            webcamData[i + 1] = bgData[i + 1];
+            webcamData[i + 2] = bgData[i + 2];
+            webcamData[i + 3] = bgData[i + 3] * bgOpacity; // Apply background opacity
+          }
+          //   }
         }
 
         // Draw the composited image data to the main canvas
@@ -172,9 +178,9 @@
     async function startWebcam() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-                facingMode: { ideal: "environment" } // Prioritize front camera
-            }
+          video: {
+            facingMode: { ideal: "environment" } // Prioritize front camera
+          }
         });
         webcamVideo.srcObject = stream;
 
@@ -204,7 +210,8 @@
     };
   </script>
 
-    <button onclick="startWebcam()">Enable Camera</button>
+  <button onclick="startWebcam()">Enable Camera</button> -->
 
 </body>
+
 </html>
